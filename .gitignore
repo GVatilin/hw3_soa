@@ -1,0 +1,10 @@
+__pycache__/
+.venv/
+venv/
+.env
+.env.*
+generated/*
+!generated/.gitkeep
+.idea/
+.vscode/
+flight_service/app/data.py

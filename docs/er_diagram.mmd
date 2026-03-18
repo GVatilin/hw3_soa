@@ -1,0 +1,42 @@
+erDiagram
+    BOOKING {
+        string id PK
+        string user_id
+        string flight_id
+        string passenger_name
+        string passenger_email
+        int seat_count
+        numeric total_price
+        string status
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    FLIGHT {
+        string id PK
+        string flight_number
+        string airline_code
+        string origin
+        string destination
+        date departure_date
+        timestamptz departure_time
+        timestamptz arrival_time
+        int total_seats
+        int available_seats
+        numeric price
+        string status
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    SEAT_RESERVATION {
+        string id PK
+        string booking_id UK
+        string flight_id FK
+        int seat_count
+        string status
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    FLIGHT ||--o{ SEAT_RESERVATION : contains

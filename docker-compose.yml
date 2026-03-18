@@ -1,0 +1,124 @@
+version: "3.9"
+
+services:
+  booking-db:
+    image: postgres:16-alpine
+    container_name: booking-db
+    environment:
+      POSTGRES_DB: booking_db
+      POSTGRES_USER: booking
+      POSTGRES_PASSWORD: booking
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U booking -d booking_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "5433:5432"
+    volumes:
+      - booking-db-data:/var/lib/postgresql/data
+
+  flight-db:
+    image: postgres:16-alpine
+    container_name: flight-db
+    environment:
+      POSTGRES_DB: flight_db
+      POSTGRES_USER: flight
+      POSTGRES_PASSWORD: flight
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flight -d flight_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "5434:5432"
+    volumes:
+      - flight-db-data:/var/lib/postgresql/data
+
+  redis-master:
+    image: redis:7-alpine
+    container_name: redis-master
+    command: ["redis-server", "--appendonly", "yes", "--protected-mode", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "6379:6379"
+
+  redis-replica:
+    image: redis:7-alpine
+    container_name: redis-replica
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    command: ["redis-server", "--replicaof", "redis-master", "6379", "--appendonly", "yes", "--protected-mode", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis-sentinel:
+    image: redis:7-alpine
+    container_name: redis-sentinel
+    depends_on:
+      redis-master:
+        condition: service_healthy
+      redis-replica:
+        condition: service_healthy
+    volumes:
+      - ./redis/sentinel.conf:/sentinel-src/sentinel.conf:ro
+      - redis-sentinel-data:/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "redis-cli -p 26379 sentinel get-master-addr-by-name mymaster | grep -q redis-master",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    command:
+      - sh
+      - -c
+      - |
+        cp /sentinel-src/sentinel.conf /data/sentinel.conf && \
+        redis-server /data/sentinel.conf --sentinel
+
+  flight-service:
+    build:
+      context: .
+      dockerfile: flight_service/Dockerfile
+    container_name: flight-service
+    env_file:
+      - .env
+    depends_on:
+      flight-db:
+        condition: service_healthy
+      redis-sentinel:
+        condition: service_healthy
+    ports:
+      - "8001:8001"
+      - "50051:50051"
+
+  booking-service:
+    build:
+      context: .
+      dockerfile: booking_service/Dockerfile
+    container_name: booking-service
+    env_file:
+      - .env
+    depends_on:
+      booking-db:
+        condition: service_healthy
+      flight-service:
+        condition: service_started
+    ports:
+      - "8000:8000"
+
+volumes:
+  booking-db-data:
+  flight-db-data:
+  redis-sentinel-data:
